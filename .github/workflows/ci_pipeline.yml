@@ -15,7 +15,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # 2. Setup Python (Diubah ke 3.10 agar stabil di Docker)
+      # 2. Setup Python
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
@@ -49,11 +49,26 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 7. Build & Push Docker Model
+      # 7. Build & Push Docker Model (Resep Docker Manual Anti-Gagal)
       - name: Build and Push Docker Model
         run: |
           cd MLProject
-          mlflow models build-docker -m mlruns/0/${{ env.run_id }}/artifacts/model -n ${{ secrets.DOCKERHUB_USERNAME }}/credit-scoring-model:latest
+          
+          # Keluarkan model dari folder tersembunyi
+          cp -r mlruns/0/${{ env.run_id }}/artifacts/model ./model_dir
+          
+          # Tulis resep Docker ringan secara manual
+          cat << 'EOF' > Dockerfile
+          FROM python:3.10-slim
+          WORKDIR /app
+          COPY model_dir /app/model_dir
+          RUN pip install pandas scikit-learn mlflow==2.19.0
+          EXPOSE 5000
+          CMD ["mlflow", "models", "serve", "-m", "/app/model_dir", "-h", "0.0.0.0", "-p", "5000"]
+          EOF
+          
+          # Bangun dan kirim ke Docker Hub
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/credit-scoring-model:latest .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/credit-scoring-model:latest
           
       # 8. Upload Tautan ke GitHub 
